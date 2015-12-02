@@ -31,6 +31,46 @@ library(tidyr)
 library(dplyr)
 library(zoo)
 
+# Functions
+Sub_MonthYear <- function(x, y, z) {
+        d <- subset(x, Month == y & Year == z )
+        return(d)
+}
+
+ViolationCount <- function(x) {
+        z1SP <- x 
+        coordinates(z1SP) <- c("lon", "lat") 
+        proj4string(z1SP) <- CRS("+init=epsg:4326")        
+        z1SP <- spTransform(z1SP, CRS( "+init=epsg:3347" ) )        
+        z2 <- gIntersects(z1SP, BusBuffer, byid = TRUE)
+        z3.indexes <- which(z2, arr.ind = TRUE)
+        z3.names <- BusStops$stop_id[z3.indexes[,1]]
+        z3.count <- aggregate(z3.indexes ~ z3.names, FUN = length)
+        z3.count <- rename(z3.count, Violation_Count = row)
+        z4 <- z3.count
+        z4 <- rename(z4, stop_id = z3.names)
+        z4 <- z4[,-3]
+        z4$Year <- x$Year[1]
+        z4$Month <- x$Month[1]
+        return(z4)
+}
+
+MonthlyMerge <- function(x) {
+        z1 <- merge(x, BusStops, by="stop_id", all = TRUE)
+        z1[is.na(z1)] <- 0
+        z1$Year <- x$Year[1]
+        z1$Month <- x$Month[1]
+        return(z1)
+}
+
+script_m_yyyy <- function(x, y) {
+        z1 <- Sub_MonthYear(TrafficViolation, x, y)
+        z1 <- ViolationCount(z1)
+        z1 <- MonthlyMerge(z1)
+        return(z1)
+}
+
+
 ## 2 ## Load and Setup Data ######################
 
 ## SFPD Traffic Incidents ####
@@ -47,23 +87,19 @@ TrafficViolation <- TrafficViolation %>% separate(col = Location, into = c("lat"
 TrafficViolation$lat <- as.numeric(TrafficViolation$lat) #convert to integer
 TrafficViolation$lon <- as.numeric(TrafficViolation$lon) #convert to integer
 TrafficViolation <- subset(TrafficViolation, lat < 90) # remove incorrectly recorded locations
-
 # Subset data to accidents and hit & runs
-# Subset by day of week (business week, without holidays)
-# Subset by time of day (commute hours)
-
-### create spatial data frame for Accidents
-TrafficSP <- TrafficViolation
-coordinates(TrafficSP) <- c("lon", "lat") #transform to Spatial Data Frame
-proj4string(TrafficSP) <- CRS("+init=epsg:4326") ## Find corrrect SOURCE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-TrafficSP <- spTransform(TrafficSP, CRS( "+init=epsg:3347" ) )  #transform
-
 #Subset Traffic Violations removing Saturday and sunday
 WeekdayViolation <- subset(TrafficViolation, DayOfWeek != "Saturday" & DayOfWeek != "Sunday")
 #Further Subset by only keeping times between 6am-10am and 3p-8p
 RushHourAM <- subset(WeekdayViolation, hour(DateTime) >= 6 & hour(DateTime) <= 9)
 RushHourPM <- subset(WeekdayViolation, hour(DateTime) >= 15 & hour(DateTime) <= 19)
 RushHour <- rbind(RushHourAM, RushHourPM) # Rush hour dataframes stacked
+
+### create spatial data frame for Accidents
+TrafficSP <- TrafficViolation
+coordinates(TrafficSP) <- c("lon", "lat") #transform to Spatial Data Frame
+proj4string(TrafficSP) <- CRS("+init=epsg:4326") ## Find corrrect SOURCE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+TrafficSP <- spTransform(TrafficSP, CRS( "+init=epsg:3347" ) )  #transform
 
 
 ## Load SF Bus Stop locations 
@@ -126,44 +162,6 @@ Bstop.count <- rename(Bstop.count, Violation_Count = row)
 head(Bstop.count)
 
 ## Aggregate count for each year and month
-Sub_MonthYear <- function(x, y, z) {
-        d <- subset(x, Month == y & Year == z )
-        return(d)
-}
-
-ViolationCount <- function(x) {
-        z1SP <- x 
-        coordinates(z1SP) <- c("lon", "lat") 
-        proj4string(z1SP) <- CRS("+init=epsg:4326")        
-        z1SP <- spTransform(z1SP, CRS( "+init=epsg:3347" ) )        
-        z2 <- gIntersects(z1SP, BusBuffer, byid = TRUE)
-        z3.indexes <- which(z2, arr.ind = TRUE)
-        z3.names <- BusStops$stop_id[z3.indexes[,1]]
-        z3.count <- aggregate(z3.indexes ~ z3.names, FUN = length)
-        z3.count <- rename(z3.count, Violation_Count = row)
-        z4 <- z3.count
-        z4 <- rename(z4, stop_id = z3.names)
-        z4 <- z4[,-3]
-        z4$Year <- x$Year[1]
-        z4$Month <- x$Month[1]
-        return(z4)
-}
-
-MonthlyMerge <- function(x) {
-        z1 <- merge(x, BusStops, by="stop_id", all = TRUE)
-        z1[is.na(z1)] <- 0
-        z1$Year <- x$Year[1]
-        z1$Month <- x$Month[1]
-        return(z1)
-}
-
-script_m_yyyy <- function(x, y) {
-        z1 <- Sub_MonthYear(TrafficViolation, x, y)
-        z1 <- ViolationCount(z1)
-        z1 <- MonthlyMerge(z1)
-        return(z1)
-}
-
 jan2015 <- script_m_yyyy(1, 2015)
 feb2015 <- script_m_yyyy(2, 2015)
 mar2015 <- script_m_yyyy(3, 2015)
@@ -175,7 +173,6 @@ aug2015 <- script_m_yyyy(8, 2015)
 sep2015 <- script_m_yyyy(9, 2015)
 oct2015 <- script_m_yyyy(10, 2015)
 year2015 <- rbind(jan2015, feb2015, mar2015, apr2015, may2015, jun2015, jul2015, aug2015, sep2015, oct2015)
-
 
 jan2014 <- script_m_yyyy(1, 2014)
 feb2014 <- script_m_yyyy(2, 2014)
@@ -247,13 +244,16 @@ nov2010 <- script_m_yyyy(11, 2010)
 dec2010 <- script_m_yyyy(12, 2010)
 year2010 <- rbind(jan2010, feb2010, mar2010, apr2010, may2010, jun2010, jul2010, aug2010, sep2010, oct2010)
 
-PanelAll <- rbind(year2015, year2014, year2013, year2012, year2011, year2010)
+PanelAll <- rbind(year2015, year2014, year2013, year2012, year2011, year2010) # stack each year
+# factor months
 
-        
+
 ### Models #########################################
+# base model 
 FEmodel <- plm(violations ~ Private + month1 + month2 ... month12 + weather, index=c("Stop_ID", "MonthYear"), model="within", data= x) # fixed effects model
-
-
+# base model with weather 
+# base model subset to driving hours
+# base model subset to driving hours with weather
 
 ### Visualizations #################################
 
@@ -267,3 +267,10 @@ mapPoints <- ggmap(map) +
         geom_point(data = TrafficIncidents, aes(x = Location$lon, y = Location$lat, alpha = 0.5, color = year(DateTime))) +
         scale_color_gradient(limits=c(2005, 2015), low="white", high="blue")
 mapPoints #call map
+
+
+# PanelAll map
+map2 <- ggmap(map) +
+        geom_point(data = BusStops, aes(x = lon, y = lat)) + 
+        geom_point(PanelAll, aes(x = lon, y = lat, group = Year))
+map2
