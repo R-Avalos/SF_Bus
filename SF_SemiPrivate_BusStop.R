@@ -138,9 +138,13 @@ SemiPrivateWhite$Geocode <- geocode(SemiPrivateWhite$Address)#get lat and lon da
 # NOAA Rainfall and Temperature 1/1/2003 to 11/1/2015 Downtown SF: http://www.ncdc.noaa.gov/cdo-web/datasets/GHCND/stations/GHCND:USW00023272/detail
 weather <- read.csv("SF Weather 2003 to 2015.csv", stringsAsFactors = FALSE)
 summary(weather)
-#convert to date format
+weather$DATE <- ymd(weather$DATE) #convert to date format
+weather$year <- year(weather$DATE) #break out year
+weather$month <- month(weather$DATE) #break out month
+MonthlyRainfall <- aggregate(PRCP ~ year + month, FUN =  sum, data = weather) # sum rainfall by month
 
 
+# add month rainfall totals to panel data
 
 
 ### Set Geographic Boundaries and Create Panel Data Set ####################
