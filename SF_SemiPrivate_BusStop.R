@@ -31,7 +31,7 @@ library(tidyr)
 library(dplyr)
 library(zoo)
 
-# Functions
+# Functions Created to Automate a few tasks
 Sub_MonthYear <- function(x, y, z) {
         d <- subset(x, Month == y & Year == z )
         return(d)
@@ -68,7 +68,7 @@ script_m_yyyy <- function(x, y) {
         z1 <- ViolationCount(z1)
         z1 <- MonthlyMerge(z1)
         return(z1)
-}
+} # combination of 3 functions
 
 
 ## 2 ## Load and Setup Data ######################
@@ -118,11 +118,21 @@ plot(BusSP) #plot of bus stops
 
 ## Load SF Semi-private bus stop locations
 # source: https://www.sfmta.com/sites/default/files/projects/2015/Shuttles%20Network%20150818%20%28list%29.pdf
-#SemiPrivateStop <- read.csv("CommuterShuttlePilotStops.csv", stringsAsFactors = FALSE)
-#SemiPrivateStop <- SemiPrivateStop[,-4] #remove double zone column
-#SemiPrivateStop <- rename(SemiPrivateStop, c("Designated.Stop.Location"="stop_id", "Muni"="Zone")) #rename stops and Muni/White column "Zone"
-#SemiPrivateStop$Address <- paste(SemiPrivateStop$stop_id, SemiPrivateStop$City, sep = ", ") #merge street and city into address column
-#SemiPrivateStop$Geocode <- geocode(SemiPrivateStop$Address)#get lat and lon data by address
+SemiPrivateFull <- read.csv("CommuterShuttlePilotStopsByHandCodeStopID.csv", header = TRUE, stringsAsFactors = FALSE) # load date
+head(SemiPrivateFull)
+SemiPrivateFull <- SemiPrivateFull[,-5] #remove double zone column
+SemiPrivateFull <- rename(SemiPrivateFull, Zone = Muni) #rename zone
+
+SemiPrivateWhite <- SemiPrivateFull[which(SemiPrivateFull$Zone == "White"),] #create white zone list
+SemiPrivateMuni <- SemiPrivateFull[which(SemiPrivateFull$Zone != "White"),] #create munit list
+
+## Get Geocodes for white zone list ###
+SemiPrivateWhite$City <- "San Francisco"
+SemiPrivateWhite$Address <- paste(SemiPrivateWhite$Designated.Stop.Location, SemiPrivateWhite$City, sep = ", ") #merge street and city into address column
+SemiPrivateWhite$Geocode <- geocode(SemiPrivateWhite$Address)#get lat and lon data by address
+
+## Merge Data back together
+
 
 ## Weather by Day in SF
 # NOAA Rainfall and Temperature 1/1/2003 to 11/1/2015 Downtown SF: http://www.ncdc.noaa.gov/cdo-web/datasets/GHCND/stations/GHCND:USW00023272/detail
@@ -249,13 +259,17 @@ PanelAll <- rbind(year2015, year2014, year2013, year2012, year2011, year2010) # 
 
 
 ### Models #########################################
-# base model 
+# base model with white zones 
 FEmodel <- plm(violations ~ Private + month1 + month2 ... month12 + weather, index=c("Stop_ID", "MonthYear"), model="within", data= x) # fixed effects model
 # base model with weather 
 # base model subset to driving hours
 # base model subset to driving hours with weather
 
 ### Visualizations #################################
+
+# Traffic incidents by year
+ggplot(data= PanelAll, aes(x=Year, y=Violation_Count)) +
+        stat_summary(fun.y = sum, geom = "line")
 
 # All traffic incidents
 palette(rainbow(10))
@@ -268,9 +282,12 @@ mapPoints <- ggmap(map) +
         scale_color_gradient(limits=c(2005, 2015), low="white", high="blue")
 mapPoints #call map
 
+# Rush Hour incidents
 
 # PanelAll map
-map2 <- ggmap(map) +
+map3 <- ggmap(map) +
         geom_point(data = BusStops, aes(x = lon, y = lat)) + 
         geom_point(PanelAll, aes(x = lon, y = lat, group = Year))
-map2
+map3
+
+
